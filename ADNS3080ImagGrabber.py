@@ -18,6 +18,8 @@ SPI_MODE = 0b11                                  #SPI mode as two bit pattern of
                                                  #[CPOL|CPHA], min:0b00 = 0, max:0b11 = 3
 SPI_MAX_SPEED = 20000
 
+SPI_OPEN = False
+
 #Register Map for the ADNS3080 OpticalFlow Sensor
 ADNS3080_PRODUCT_ID = 0x00
 ADNS3080_CONFIGURATION_BITS = 0x0a
@@ -28,22 +30,81 @@ ADNS3080_PRODUCT_ID_VALUE = 0x17
 ADNS3080_PIXELS_X = 30
 ADNS3080_PIXELS_Y = 30
 
-grid_size = 15
-
 x = 0
 y = 0
-pixelValue = [0 for i in range(ADNS3080_PIXELS_X*ADNS3080_PIXELS_Y)]
 
-end_program = False
+class GUI():
+    grid_size = 15
+    pixelValue = [0 for i in range(ADNS3080_PIXELS_X*ADNS3080_PIXELS_Y)]
+    end_program = False
 
+    def __init__(self, master):
+        master.title("ADNS3080 Capture Image")        # set main window's title
+        master.geometry("900x900")                    # set window's size
+        
+        self.canvas = Canvas(master, width = self.grid_size*ADNS3080_PIXELS_X, height = self.grid_size*ADNS3080_PIXELS_Y)
+        self.canvas.place(x=0,y=0)
+
+        self.button_exit = Button(master, text="EXIT", width = 15, command = self.endProgram)
+        self.button_exit.place(x=self.grid_size*ADNS3080_PIXELS_X,y=0)
+
+        self.read_loop()                              # start attempts to read from ADNS3080 via SPI
+
+    def __del__(self):
+        self.endProgram()
+
+    def endProgram(self):
+        global SPI_OPEN
+        try:
+            self.timer.cancel()
+            SPI_OPEN = False
+        except:
+            print("failed to exit program")
+
+    def read_loop(self):
+        try:
+            self.timer.cancel()
+        except:
+            hoge = 1 # do nothing
+
+        if SPI_OPEN == True:
+            self.printPixelData()
+
+            self.timer = Timer(0.0, self.read_loop)
+            self.timer.start()
+        else:
+            hoge = 1 # do nothing
+            
+    def printPixelData(self):
+        spiWrite(ADNS3080_FRAME_CAPTURE,[0x83])
+        time.sleep(1510e-6)
+        for column in range(ADNS3080_PIXELS_Y):
+            for row in range(ADNS3080_PIXELS_X):
+                if SPI_OPEN == True:
+                    regValue = spiRead(ADNS3080_FRAME_CAPTURE,[0xff])
+                    self.pixelValue[row + column * ADNS3080_PIXELS_X] = regValue[0] & 0x3f   #Only lower 6bits have data
+                    colour = int(self.pixelValue[row + column * ADNS3080_PIXELS_X]) * 3      #*3 to improve image contrast
+                    #colour = row * column / 3.53
+                    fillColour = "#%02x%02x%02x" % (colour,colour,colour)
+                    self.canvas.create_rectangle(row*self.grid_size,column*self.grid_size,(row+1)*self.grid_size,(column+1)*self.grid_size,fill= fillColour)
+                else:
+                    hoge = 1 # do nothing
+        #root.update()
+        #print(self.pixelValue)
+
+#end class GUI()
 
 
 def spiSettings(bus,device,mode,max_speed):
-    global spi
-    spi = spidev.SpiDev()                        #Open SPI device
-    spi.open(bus,device)                         #spi.open(bus, device)
-    spi.mode = mode
-    spi.max_speed_hz = max_speed
+    global spi, SPI_OPEN
+    try:
+        spi = spidev.SpiDev()                        #Open SPI device
+        spi.open(bus,device)                         #spi.open(bus, device)
+        spi.mode = mode
+        spi.max_speed_hz = max_speed
+        SPI_OPEN = True
+    except:
+        print("Could not open SPI")
 #end def spiSettings()
 
 def checkConnect():
@@ -98,63 +159,24 @@ def updateDxDy():
     time.sleep(0.01)
 #end def updateSensor()
 
-def printPixelData():
-    spiWrite(ADNS3080_FRAME_CAPTURE,[0x83])
-    time.sleep(1510e-6)
-    for column in range(ADNS3080_PIXELS_Y):
-        for row in range(ADNS3080_PIXELS_X):
-            regValue = spiRead(ADNS3080_FRAME_CAPTURE,[0xff])
-            pixelValue[row + column * ADNS3080_PIXELS_X] = regValue[0] & 0x3f   #Only lower 6bits have data
-            colour = int(pixelValue[row + column * ADNS3080_PIXELS_X]) * 3      #*3 to improve image contrast
-            #colour = row * column / 3.53
-            fillColour = "#%02x%02x%02x" % (colour,colour,colour)
-            Canv.create_rectangle(row*grid_size,column*grid_size,(row+1)*grid_size,(column+1)*grid_size,fill= fillColour)
-            #print(colour)
-    root.update()
-    print(pixelValue)
-#end def printPixelData()
 
-#def endProgram(event):
-#    end_program = True
-#end def endProgram()
-
-#def readLoop():
-#    if end_program == False:
-#        printPixelData()
-#    else:
-#        spi.close()
-#    t = Timer(1.0,readLoop)
-#    t.start()
-#end def readLoop()
-
-#Settings
+## Settings ##
 spiSettings(0,SS_PIN,SPI_MODE,SPI_MAX_SPEED)
 checkConnect()
 configuration()
 
+
+## main loop ##
 root = Tk()
-root.title("ADNS3080 Capture Image")
-root.geometry("900x900")
 
-Canv = Canvas(root, width = grid_size*ADNS3080_PIXELS_X, height = grid_size*ADNS3080_PIXELS_Y)
-Canv.place(x=0,y=0)
+gui = GUI(root)
 
-#button_exit = Button(root, text="EXIT", width = 15)
-#button_exit.bind("<Button-1>",endProgram)
-#button_exit.place(x=grid_size*ADNS3080_PIXELS_X,y=0)
+print("entering main loop!")
 
-#main loop
+root.mainloop()
 
-#readLoop()
-#root.mainloop()
+gui.endProgram()
 
-try:
-    while end_program == False:
-        updateDxDy()
-        printPixelData()
-        root.update()
+spi.close()
 
-except KeyboardInterrupt:
-    spi.close()
-    root.mainloop()
-
+print("existing")
