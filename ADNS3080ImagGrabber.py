@@ -7,17 +7,19 @@
 # SPIMISO|   MISO
 # SPISCLK|   SCLK
 # SPICE0 |   NCS
+#  RST   |   25
 
 import spidev
 import time
 from Tkinter import *
 from threading import Timer
+import RPi.GPIO as GPIO
 
+RESET_PIN = 25                                   #GPIO25 for reset ADNS3080
 SS_PIN = 0                                       #GPIO8(CE0)  if choose GE1, set 1
 SPI_MODE = 0b11                                  #SPI mode as two bit pattern of clock polarity and phase
                                                  #[CPOL|CPHA], min:0b00 = 0, max:0b11 = 3
 SPI_MAX_SPEED = 20000
-
 SPI_OPEN = False
 
 #Register Map for the ADNS3080 OpticalFlow Sensor
@@ -36,7 +38,9 @@ y = 0
 class GUI():
     grid_size = 15
     pixelValue = [0 for i in range(ADNS3080_PIXELS_X*ADNS3080_PIXELS_Y)]
-    end_program = False
+    position_X = 0
+    position_Y = 0
+    capture_image = True
 
     def __init__(self, master):
         master.title("ADNS3080 Capture Image")        # set main window's title
@@ -47,6 +51,9 @@ class GUI():
 
         self.button_exit = Button(master, text="EXIT", width = 15, command = self.endProgram)
         self.button_exit.place(x=self.grid_size*ADNS3080_PIXELS_X,y=0)
+
+        self.button_change_status = Button(master, text="Change", width = 15, command = self.change_status)
+        self.button_change_status.place(x=self.grid_size*ADNS3080_PIXELS_X,y=self.grid_size*ADNS3080_PIXELS_Y)
 
         self.read_loop()                              # start attempts to read from ADNS3080 via SPI
 
@@ -61,6 +68,15 @@ class GUI():
         except:
             print("failed to exit program")
 
+    def change_status(self):
+        self.timer.cancel()
+        if self.capture_image == False:
+            self.capture_image = True
+        else:
+            self.capture_image = False
+        checkConnect()
+        self.read_loop()
+
     def read_loop(self):
         try:
             self.timer.cancel()
@@ -68,7 +84,10 @@ class GUI():
             hoge = 1 # do nothing
 
         if SPI_OPEN == True:
-            self.printPixelData()
+            if self.capture_image == True:
+                self.printPixelData()
+            else:
+                self.updateDxDy()
 
             self.timer = Timer(0.0, self.read_loop)
             self.timer.start()
@@ -89,8 +108,25 @@ class GUI():
                     self.canvas.create_rectangle(row*self.grid_size,column*self.grid_size,(row+1)*self.grid_size,(column+1)*self.grid_size,fill= fillColour)
                 else:
                     hoge = 1 # do nothing
-        #root.update()
         #print(self.pixelValue)
+
+    def updateDxDy(self):
+        buf = [0 for i in range(4)]
+        buf = spiRead(ADNS3080_MOTION_BURST,buf)
+        motion = buf[0]
+        if  (motion & 0x10):
+            print("ADNS-3080 overflow")
+        elif (motion & 0x80):
+            dx = buf[1] if(buf[1]<0x80) else (buf[1]-0xFF)
+            dy = buf[2] if(buf[2]<0x80) else (buf[2]-0xFF)
+            surfaceQuality = buf[3]
+
+            self.position_X += dx
+            self.position_Y += dy
+
+            print('x:{0},dx:{1}  y:{2},dy:{3}  surfaceQuality:{4}'.format(self.position_X,dx,self.position_Y,dy,surfaceQuality))
+        time.sleep(0.01)
+    #end def updateSensor()
 
 #end class GUI()
 
@@ -106,6 +142,15 @@ def spiSettings(bus,device,mode,max_speed):
     except:
         print("Could not open SPI")
 #end def spiSettings()
+
+def ADNS3080reset():
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(RESET_PIN, GPIO.OUT)
+    GPIO.output(RESET_PIN, GPIO.HIGH)
+    time.sleep(10e-6)
+    GPIO.output(RESET_PIN, GPIO.LOW)
+    time.sleep(500e-6)
+#end def ADNS3080reset()
 
 def checkConnect():
     resp = spiRead(ADNS3080_PRODUCT_ID,[0xff])
@@ -147,6 +192,7 @@ def updateDxDy():
     motion = buf[0]
     if  (motion & 0x10):
         print("ADNS-3080 overflow")
+        print(motion)
     elif (motion & 0x80):
         dx = buf[1] if(buf[1]<0x80) else (buf[1]-0xFF)
         dy = buf[2] if(buf[2]<0x80) else (buf[2]-0xFF)
@@ -162,20 +208,23 @@ def updateDxDy():
 
 ## Settings ##
 spiSettings(0,SS_PIN,SPI_MODE,SPI_MAX_SPEED)
+ADNS3080reset()
 checkConnect()
 configuration()
 
-
 ## main loop ##
-root = Tk()
+#root = Tk()
 
-gui = GUI(root)
+#gui = GUI(root)
 
 print("entering main loop!")
 
-root.mainloop()
+#root.mainloop()
 
-gui.endProgram()
+#gui.endProgram()
+
+while True:
+    updateDxDy()
 
 spi.close()
 
