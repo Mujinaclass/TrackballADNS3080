@@ -7,7 +7,7 @@
 # SPIMISO|   MISO
 # SPISCLK|   SCLK
 # SPICE0 |   NCS
-#  RST   |   25
+# GPIO25 |   RST
 
 import spidev
 import time
@@ -19,7 +19,7 @@ RESET_PIN = 25                                   #GPIO25 for reset ADNS3080
 SS_PIN = 0                                       #GPIO8(CE0)  if choose GE1, set 1
 SPI_MODE = 0b11                                  #SPI mode as two bit pattern of clock polarity and phase
                                                  #[CPOL|CPHA], min:0b00 = 0, max:0b11 = 3
-SPI_MAX_SPEED = 20000
+SPI_MAX_SPEED = 2500000                          #
 SPI_OPEN = False
 
 #Register Map for the ADNS3080 OpticalFlow Sensor
@@ -41,6 +41,7 @@ class GUI():
     position_X = 0
     position_Y = 0
     capture_image = True
+    pixel_dictionary = {}
 
     def __init__(self, master):
         master.title("ADNS3080 Capture Image")        # set main window's title
@@ -101,12 +102,19 @@ class GUI():
         for column in range(ADNS3080_PIXELS_Y):
             for row in range(ADNS3080_PIXELS_X):
                 if (SPI_OPEN == True & self.capture_image == True):
+                    try:         # find the old pixel if it exists and delete it 
+                        self.old_pixel = self.pixel_dictionary[row + column * ADNS3080_PIXELS_Y]
+                        self.canvas.delete(self.old_pixel)
+                        del(self.old_pixel)
+                    except:
+                        hoge = 1 # do nothing
                     regValue = spiRead(ADNS3080_FRAME_CAPTURE,[0xff])
                     self.pixelValue[row + column * ADNS3080_PIXELS_X] = regValue[0] & 0x3f   #Only lower 6bits have data
                     colour = int(self.pixelValue[row + column * ADNS3080_PIXELS_X]) * 3      #*3 to improve image contrast
-                    #colour = row * column / 3.53
                     fillColour = "#%02x%02x%02x" % (colour,colour,colour)
-                    self.canvas.create_rectangle(row*self.grid_size,column*self.grid_size,(row+1)*self.grid_size,(column+1)*self.grid_size,fill= fillColour)
+                    #draw new pixel and add to pixel_array
+                    self.new_pixel = self.canvas.create_rectangle(row*self.grid_size,column*self.grid_size,(row+1)*self.grid_size,(column+1)*self.grid_size,fill= fillColour)
+                    self.pixel_dictionary[row + column * ADNS3080_PIXELS_X] = self.new_pixel
                 else:
                     hoge = 1 # do nothing
         #print(self.pixelValue)
