@@ -19,7 +19,7 @@ RESET_PIN = 25                                   #GPIO25 for reset ADNS3080
 SS_PIN = 0                                       #GPIO8(CE0)  if choose GE1, set 1
 SPI_MODE = 0b11                                  #SPI mode as two bit pattern of clock polarity and phase
                                                  #[CPOL|CPHA], min:0b00 = 0, max:0b11 = 3
-SPI_MAX_SPEED = 2500000                          #
+SPI_MAX_SPEED = 2000000
 SPI_OPEN = False
 
 #Register Map for the ADNS3080 OpticalFlow Sensor
@@ -36,7 +36,7 @@ x = 0
 y = 0
 
 class GUI():
-    grid_size = 15
+    grid_size = 10
     pixelValue = [0 for i in range(ADNS3080_PIXELS_X*ADNS3080_PIXELS_Y)]
     position_X = 0
     position_Y = 0
@@ -70,14 +70,15 @@ class GUI():
             print("failed to exit program")
 
     def change_status(self):
+        global SPI_OPEN
         self.timer.cancel()
         if self.capture_image == False:
             self.capture_image = True
         else:
             self.capture_image = False
-        resetADNS3080()
+        resetADNS3080()                               # must reset to change mode in ADNS3080 to get dx dy
         checkConnect()
-        self.read_loop()
+        configuration()
 
     def read_loop(self):
         try:
@@ -110,14 +111,13 @@ class GUI():
                         hoge = 1 # do nothing
                     regValue = spiRead(ADNS3080_FRAME_CAPTURE,[0xff])
                     self.pixelValue[row + column * ADNS3080_PIXELS_X] = regValue[0] & 0x3f   #Only lower 6bits have data
-                    colour = int(self.pixelValue[row + column * ADNS3080_PIXELS_X]) * 3      #*3 to improve image contrast
+                    colour = int(self.pixelValue[row + column * ADNS3080_PIXELS_X]) * 4      #*4 to improve image contrast for display
                     fillColour = "#%02x%02x%02x" % (colour,colour,colour)
                     #draw new pixel and add to pixel_array
                     self.new_pixel = self.canvas.create_rectangle(row*self.grid_size,column*self.grid_size,(row+1)*self.grid_size,(column+1)*self.grid_size,fill= fillColour)
                     self.pixel_dictionary[row + column * ADNS3080_PIXELS_X] = self.new_pixel
                 else:
-                    hoge = 1 # do nothing
-        #print(self.pixelValue)
+                    break
 
     def updateDxDy(self):
         buf = [0 for i in range(4)]
@@ -133,10 +133,8 @@ class GUI():
             self.position_X += dx
             self.position_Y += dy
 
-            print('x:{0},dx:{1}  y:{2},dy:{3}  surfaceQuality:{4}\n'.format(self.position_X,dx,self.position_Y,dy,surfaceQuality))
+            print('x:{0},dx:{1}  y:{2},dy:{3}  surfaceQuality:{4}'.format(self.position_X,dx,self.position_Y,dy,surfaceQuality))
         time.sleep(0.01)
-    #end def updateSensor()
-
 #end class GUI()
 
 
@@ -167,7 +165,7 @@ def checkConnect():
     if product_ID == ADNS3080_PRODUCT_ID_VALUE:
         print("ADNS-3080 found. Product ID: 0x" '%x' %product_ID)
     else:
-        print("Could not found ADNS-3080: " '%x' %product_ID)
+        print("Could not found ADNS-3080 or too fast SPI speed: 0x" '%x' %product_ID)
 #end def checkConnect()
 
 def configuration():
@@ -180,7 +178,7 @@ def configuration():
         print("Resolution in counts per inch = 400")
 #end def configuration()
 
-def spiRead(reg,data):                     #"data" must be list
+def spiRead(reg,data):                                        #"data" must be list
     length = len(data)
     to_send = [reg]
     to_send += data
