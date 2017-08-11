@@ -14,6 +14,12 @@ import time
 from Tkinter import *
 from threading import Timer
 import RPi.GPIO as GPIO
+import matplotlib
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
+import matplotlib.pyplot as plt
+
+plt.style.use("ggplot")
 
 RESET_PIN = 25                                   #GPIO25 for reset ADNS3080
 SS_PIN = 0                                       #GPIO8(CE0)  if choose GE1, set 1
@@ -32,9 +38,6 @@ ADNS3080_PRODUCT_ID_VALUE = 0x17
 ADNS3080_PIXELS_X = 30
 ADNS3080_PIXELS_Y = 30
 
-x = 0
-y = 0
-
 class GUI():
     grid_size = 10
     pixelValue = [0 for i in range(ADNS3080_PIXELS_X*ADNS3080_PIXELS_Y)]
@@ -42,13 +45,14 @@ class GUI():
     position_Y = 0
     capture_image = True
     pixel_dictionary = {}
+    plot_dpi = 100
 
     def __init__(self, master):
         master.title("ADNS3080 Capture Image")        # set main window's title
         master.geometry("900x900")                    # set window's size
         
-        self.canvas = Canvas(master, width = self.grid_size*ADNS3080_PIXELS_X, height = self.grid_size*ADNS3080_PIXELS_Y)
-        self.canvas.place(x=0,y=0)
+        self.canvas_for_Image = Canvas(master, width = self.grid_size*ADNS3080_PIXELS_X, height = self.grid_size*ADNS3080_PIXELS_Y)
+        self.canvas_for_Image.place(x=0,y=0)
 
         self.button_exit = Button(master, text="EXIT", width = 15, command = self.endProgram)
         self.button_exit.place(x=self.grid_size*ADNS3080_PIXELS_X,y=0)
@@ -56,7 +60,23 @@ class GUI():
         self.button_change_status = Button(master, text="Change", width = 15, command = self.change_status)
         self.button_change_status.place(x=self.grid_size*ADNS3080_PIXELS_X,y=self.grid_size*ADNS3080_PIXELS_Y)
 
+        f = Figure(figsize = (self.grid_size*ADNS3080_PIXELS_X / self.plot_dpi, self.grid_size*ADNS3080_PIXELS_Y/ self.plot_dpi), dpi = self.plot_dpi)
+        self.a = f.add_subplot(111)
+        self.a.set_xlim(-200,200)
+        self.a.set_ylim(-200,200)
+        self.a.plot(self.position_X,self.position_Y,"o")
+        self.canvas_for_plot = FigureCanvasTkAgg(f, master)
+        self.canvas_for_plot.show()
+        self.canvas_for_plot.get_tk_widget().place(x=0,y=self.grid_size*ADNS3080_PIXELS_Y)
+
         self.read_loop()                              # start attempts to read from ADNS3080 via SPI
+
+    def plotData(self):
+        self.a.clear()
+        self.a.set_xlim(-200,200)
+        self.a.set_ylim(-200,200)
+        self.a.plot(self.position_X,self.position_Y,"o")
+        self.canvas_for_plot.show()
 
     def __del__(self):
         self.endProgram()
@@ -105,7 +125,7 @@ class GUI():
                 if (SPI_OPEN == True & self.capture_image == True):
                     try:         # find the old pixel if it exists and delete it 
                         self.old_pixel = self.pixel_dictionary[row + column * ADNS3080_PIXELS_Y]
-                        self.canvas.delete(self.old_pixel)
+                        self.canvas_for_Image.delete(self.old_pixel)
                         del(self.old_pixel)
                     except:
                         hoge = 1 # do nothing
@@ -114,7 +134,7 @@ class GUI():
                     colour = int(self.pixelValue[row + column * ADNS3080_PIXELS_X]) * 4      #*4 to improve image contrast for display
                     fillColour = "#%02x%02x%02x" % (colour,colour,colour)
                     #draw new pixel and add to pixel_array
-                    self.new_pixel = self.canvas.create_rectangle(row*self.grid_size,column*self.grid_size,(row+1)*self.grid_size,(column+1)*self.grid_size,fill= fillColour)
+                    self.new_pixel = self.canvas_for_Image.create_rectangle(row*self.grid_size,column*self.grid_size,(row+1)*self.grid_size,(column+1)*self.grid_size,fill= fillColour)
                     self.pixel_dictionary[row + column * ADNS3080_PIXELS_X] = self.new_pixel
                 else:
                     break
@@ -134,6 +154,7 @@ class GUI():
             self.position_Y += dy
 
             print('x:{0},dx:{1}  y:{2},dy:{3}  surfaceQuality:{4}'.format(self.position_X,dx,self.position_Y,dy,surfaceQuality))
+        self.plotData()
         time.sleep(0.01)
 #end class GUI()
 
