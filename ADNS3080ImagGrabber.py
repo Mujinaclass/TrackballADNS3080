@@ -74,6 +74,7 @@ class GUI():
             self.capture_image = True
         else:
             self.capture_image = False
+        resetADNS3080()
         checkConnect()
         self.read_loop()
 
@@ -99,7 +100,7 @@ class GUI():
         time.sleep(1510e-6)
         for column in range(ADNS3080_PIXELS_Y):
             for row in range(ADNS3080_PIXELS_X):
-                if SPI_OPEN == True:
+                if (SPI_OPEN == True & self.capture_image == True):
                     regValue = spiRead(ADNS3080_FRAME_CAPTURE,[0xff])
                     self.pixelValue[row + column * ADNS3080_PIXELS_X] = regValue[0] & 0x3f   #Only lower 6bits have data
                     colour = int(self.pixelValue[row + column * ADNS3080_PIXELS_X]) * 3      #*3 to improve image contrast
@@ -124,7 +125,7 @@ class GUI():
             self.position_X += dx
             self.position_Y += dy
 
-            print('x:{0},dx:{1}  y:{2},dy:{3}  surfaceQuality:{4}'.format(self.position_X,dx,self.position_Y,dy,surfaceQuality))
+            print('x:{0},dx:{1}  y:{2},dy:{3}  surfaceQuality:{4}\n'.format(self.position_X,dx,self.position_Y,dy,surfaceQuality))
         time.sleep(0.01)
     #end def updateSensor()
 
@@ -143,14 +144,14 @@ def spiSettings(bus,device,mode,max_speed):
         print("Could not open SPI")
 #end def spiSettings()
 
-def ADNS3080reset():
+def resetADNS3080():
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(RESET_PIN, GPIO.OUT)
     GPIO.output(RESET_PIN, GPIO.HIGH)
     time.sleep(10e-6)
     GPIO.output(RESET_PIN, GPIO.LOW)
     time.sleep(500e-6)
-#end def ADNS3080reset()
+#end def resetADNS3080()
 
 def checkConnect():
     resp = spiRead(ADNS3080_PRODUCT_ID,[0xff])
@@ -185,47 +186,25 @@ def spiWrite(reg,data):
     spi.writebytes(to_send)
 #end def spiWrite()
 
-def updateDxDy():
-    global x,y
-    buf = [0 for i in range(4)]
-    buf = spiRead(ADNS3080_MOTION_BURST,buf)
-    motion = buf[0]
-    if  (motion & 0x10):
-        print("ADNS-3080 overflow")
-        print(motion)
-    elif (motion & 0x80):
-        dx = buf[1] if(buf[1]<0x80) else (buf[1]-0xFF)
-        dy = buf[2] if(buf[2]<0x80) else (buf[2]-0xFF)
-        surfaceQuality = buf[3]
-
-        x += dx
-        y += dy
-
-        print('x:{0},dx:{1}  y:{2},dy:{3}  surfaceQuality:{4}'.format(x,dx,y,dy,surfaceQuality))
-    time.sleep(0.01)
-#end def updateSensor()
-
 
 ## Settings ##
 spiSettings(0,SS_PIN,SPI_MODE,SPI_MAX_SPEED)
-ADNS3080reset()
+resetADNS3080()
 checkConnect()
 configuration()
 
 ## main loop ##
-#root = Tk()
+root = Tk()
 
-#gui = GUI(root)
+gui = GUI(root)
 
 print("entering main loop!")
 
-#root.mainloop()
+root.mainloop()
 
-#gui.endProgram()
-
-while True:
-    updateDxDy()
+gui.endProgram()
 
 spi.close()
 
+GPIO.cleanup()
 print("existing")
