@@ -9,19 +9,16 @@
 # SPICE0 |   NCS
 # GPIO25 |   RST
 
-#import spidev
 import pigpio
 import time
 from Tkinter import *
 from threading import Timer
-#import RPi.GPIO as GPIO
 
 RESET_PIN = 25                                   #GPIO25 for reset ADNS3080
-#SS_PIN = 0                                      #GPIO8(CE0)  if choose GE1, set 1
 SPI_CHANNEL = 0                                  # GPIO8(CE0)  if choose CE1, set 1
 SPI_MODE = 3                                     #SPI mode as two bit pattern of clock polarity and phase
                                                  #[CPOL|CPHA] > [0|0] = 0 (mode 0), [0|1] = 1 (mode 1), [1|0] = 2 (mode 2), [1|1] = 3 (mode 3) 
-SPI_MAX_SPEED = 2000000
+SPI_MAX_SPEED = 500000
 SPI_OPEN = False
 
 #Register Map for the ADNS3080 OpticalFlow Sensor
@@ -33,6 +30,8 @@ ADNS3080_PRODUCT_ID_VALUE = 0x17
 
 ADNS3080_PIXELS_X = 30
 ADNS3080_PIXELS_Y = 30
+
+DATA_FOR_CAPTURE_IMAGE = [0xff,ADNS3080_FRAME_CAPTURE]*899 + [0xff]     # make [0xff (dummy 1), Address, 0xff (2), Address, ..., Adreess, 0xff (900)]
 
 class GUI():
     grid_size = 10
@@ -105,7 +104,7 @@ class GUI():
         try:
             self.timer.cancel()
         except:
-            hoge = 1 # do nothing
+            thing = None # do nothing
 
         if SPI_OPEN == True:
             if self.capture_image == True:
@@ -116,29 +115,33 @@ class GUI():
             self.timer = Timer(0.0, self.read_loop)
             self.timer.start()
         else:
-            hoge = 1 # do nothing
+            thing = None # do nothing
             
     def printPixelData(self):
         spiWrite(ADNS3080_FRAME_CAPTURE,[0x83])
         time.sleep(1510e-6)
+        regValue = spiRead(ADNS3080_FRAME_CAPTURE,DATA_FOR_CAPTURE_IMAGE)
+        regValue = regValue[::2]
+#        spiWrite(ADNS3080_FRAME_CAPTURE,[0x83])
+#        time.sleep(1510e-6)
         for column in range(ADNS3080_PIXELS_Y):
             for row in range(ADNS3080_PIXELS_X):
-                if (SPI_OPEN == True & self.capture_image == True):
-                    try:         # find the old pixel if it exists and delete it 
-                        self.old_pixel = self.pixel_dictionary[row + column * ADNS3080_PIXELS_Y]
-                        self.canvas_for_Image.delete(self.old_pixel)
-                        del(self.old_pixel)
-                    except:
-                        hoge = 1 # do nothing
-                    regValue = spiRead(ADNS3080_FRAME_CAPTURE,[0xff])
-                    self.pixelValue[row + column * ADNS3080_PIXELS_X] = regValue[0] & 0x3f   #Only lower 6bits have data
-                    colour = int(self.pixelValue[row + column * ADNS3080_PIXELS_X]) * 4      #*4 to improve image contrast for display
-                    fillColour = "#%02x%02x%02x" % (colour,colour,colour)
-                    #draw new pixel and add to pixel_array
-                    self.new_pixel = self.canvas_for_Image.create_rectangle(row*self.grid_size,column*self.grid_size,(row+1)*self.grid_size,(column+1)*self.grid_size,fill= fillColour,width=0)
-                    self.pixel_dictionary[row + column * ADNS3080_PIXELS_X] = self.new_pixel
-                else:
-                    break
+#                if (SPI_OPEN == True & self.capture_image == True):
+                try:         # find the old pixel if it exists and delete it 
+                    self.old_pixel = self.pixel_dictionary[row + column * ADNS3080_PIXELS_Y]
+                    self.canvas_for_Image.delete(self.old_pixel)
+                    del(self.old_pixel)
+                except:
+                    thing = None # do nothing
+#                    regValue = spiRead(ADNS3080_FRAME_CAPTURE,[0xff])
+                self.pixelValue[row + column * ADNS3080_PIXELS_X] = regValue[row + column * ADNS3080_PIXELS_X] & 0x3f   #Only lower 6bits have data
+                colour = int(self.pixelValue[row + column * ADNS3080_PIXELS_X]) * 4      #*4 to improve image contrast for display
+                fillColour = "#%02x%02x%02x" % (colour,colour,colour)
+                #draw new pixel and add to pixel_array
+                self.new_pixel = self.canvas_for_Image.create_rectangle(row*self.grid_size,column*self.grid_size,(row+1)*self.grid_size,(column+1)*self.grid_size,fill= fillColour,width=0)
+                self.pixel_dictionary[row + column * ADNS3080_PIXELS_X] = self.new_pixel
+                #else:
+                    #break
 
     def updateDxDy(self):
         buf = [0 for i in range(4)]
