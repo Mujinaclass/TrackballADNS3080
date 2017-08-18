@@ -9,16 +9,18 @@
 # SPICE0 |   NCS
 # GPIO25 |   RST
 
-import spidev
+#import spidev
+import pigpio
 import time
 from Tkinter import *
 from threading import Timer
-import RPi.GPIO as GPIO
+#import RPi.GPIO as GPIO
 
 RESET_PIN = 25                                   #GPIO25 for reset ADNS3080
-SS_PIN = 0                                       #GPIO8(CE0)  if choose GE1, set 1
-SPI_MODE = 0b11                                  #SPI mode as two bit pattern of clock polarity and phase
-                                                 #[CPOL|CPHA], min:0b00 = 0, max:0b11 = 3
+#SS_PIN = 0                                      #GPIO8(CE0)  if choose GE1, set 1
+SPI_CHANNEL = 0                                  # GPIO8(CE0)  if choose CE1, set 1
+SPI_MODE = 3                                     #SPI mode as two bit pattern of clock polarity and phase
+                                                 #[CPOL|CPHA] > [0|0] = 0 (mode 0), [0|1] = 1 (mode 1), [1|0] = 2 (mode 2), [1|1] = 3 (mode 3) 
 SPI_MAX_SPEED = 2000000
 SPI_OPEN = False
 
@@ -44,7 +46,7 @@ class GUI():
 
     def __init__(self, master):
         master.title("ADNS3080 Capture Image")        # set main window's title
-        master.geometry("900x900")                    # set window's size
+        master.geometry("600x600")                    # set window's size
         
         self.canvas_for_Image = Canvas(master, width = self.grid_size*ADNS3080_PIXELS_X, height = self.grid_size*ADNS3080_PIXELS_Y)
         self.canvas_for_Image.place(x=0,y=0)
@@ -56,18 +58,17 @@ class GUI():
         for i in range(6):
             for j in range(6):
                 self.canvas_for_Plot.create_rectangle(j*50+1, i*50+1, (j+1)*50-1, (i+1)*50-1, width=0, fill="lightgray")
-        self.canvas_for_Plot.create_text(100,100,text="Test")
         self.init_data = self.canvas_for_Plot.create_oval(self.position_X - self.grid_size/2 + self.position_gap, self.position_Y - self.grid_size/2 + self.position_gap,\
                                                          self.position_X + self.grid_size/2 + self.position_gap, self.position_Y + self.grid_size/2 + self.position_gap, fill = 'blue')
         self.old_data = self.init_data
         
         
 
-        self.button_exit = Button(master, text="EXIT", width = 15, command = self.endProgram)
+        self.button_exit = Button(master, text="STOP", width = 15, command = self.endProgram)
         self.button_exit.place(x=self.grid_size*ADNS3080_PIXELS_X,y=0)
 
-        self.button_change_status = Button(master, text="Change", width = 15, command = self.change_status)
-        self.button_change_status.place(x=self.grid_size*ADNS3080_PIXELS_X,y=self.grid_size*ADNS3080_PIXELS_Y)
+        self.button_change_status = Button(master, text="Change Mode", width = 15, command = self.change_status)
+        self.button_change_status.place(x=self.grid_size*ADNS3080_PIXELS_X,y=self.grid_size*3)
 
         self.read_loop()                              # start attempts to read from ADNS3080 via SPI
 
@@ -159,24 +160,21 @@ class GUI():
 #end class GUI()
 
 
-def spiSettings(bus,device,mode,max_speed):
-    global spi, SPI_OPEN
+def spiSettings(spi_channel,spi_speed,spi_mode):
+    global pi, spi, SPI_OPEN
     try:
-        spi = spidev.SpiDev()                        #Open SPI device
-        spi.open(bus,device)                         #spi.open(bus, device)
-        spi.mode = mode
-        spi.max_speed_hz = max_speed
+        pi = pigpio.pi()
+        spi = pi.spi_open(spi_channel,spi_speed,spi_mode)   # open SPI device on <SPI_CHANNEL> in <SPI_MODE> at <SPI_MAX_SPEED> bits per sec
         SPI_OPEN = True
     except:
         print("Could not open SPI")
 #end def spiSettings()
 
 def resetADNS3080():
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(RESET_PIN, GPIO.OUT)
-    GPIO.output(RESET_PIN, GPIO.HIGH)
+    pi.set_mode(RESET_PIN, pigpio.OUTPUT)
+    pi.write(RESET_PIN, 1)
     time.sleep(10e-6)
-    GPIO.output(RESET_PIN, GPIO.LOW)
+    pi.write(RESET_PIN, 0)
     time.sleep(500e-6)
 #end def resetADNS3080()
 
@@ -186,7 +184,7 @@ def checkConnect():
     if product_ID == ADNS3080_PRODUCT_ID_VALUE:
         print("ADNS-3080 found. Product ID: 0x" '%x' %product_ID)
     else:
-        print("Could not found ADNS-3080 or too fast SPI speed: 0x" '%x' %product_ID)
+        print("Could not found ADNS-3080: 0x" '%x' %product_ID)
 #end def checkConnect()
 
 def configuration():
@@ -203,19 +201,19 @@ def spiRead(reg,data):                                        #"data" must be li
     length = len(data)
     to_send = [reg]
     to_send += data
-    resp = spi.xfer(to_send)
-    return resp[1:length+1]
+    resp = pi.spi_xfer(spi,to_send)                           # resp is tuple (count, rx_data (bytearray))
+    return list(resp[1])[1:length+1]
 #end def spiRead()
 
 def spiWrite(reg,data):
     to_send = [reg | 0x80]
     to_send += data
-    spi.writebytes(to_send)
+    pi.spi_write(spi,to_send)
 #end def spiWrite()
 
 
 ## Settings ##
-spiSettings(0,SS_PIN,SPI_MODE,SPI_MAX_SPEED)
+spiSettings(SPI_CHANNEL,SPI_MAX_SPEED,SPI_MODE)
 resetADNS3080()
 checkConnect()
 configuration()
@@ -231,7 +229,6 @@ root.mainloop()
 
 gui.endProgram()
 
-spi.close()
+pi.spi_close(spi)
 
-GPIO.cleanup()
 print("existing")
