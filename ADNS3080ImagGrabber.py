@@ -11,8 +11,11 @@
 
 import pigpio
 import time
+import numpy
+import PIL.Image, PIL.ImageTk
 from Tkinter import *
 from threading import Timer
+
 
 RESET_PIN = 25                                   #GPIO25 for reset ADNS3080
 SPI_CHANNEL = 0                                  # GPIO8(CE0)  if choose CE1, set 1
@@ -121,27 +124,38 @@ class GUI():
         spiWrite(ADNS3080_FRAME_CAPTURE,[0x83])
         time.sleep(1510e-6)
         regValue = spiRead(ADNS3080_FRAME_CAPTURE,DATA_FOR_CAPTURE_IMAGE)
-        regValue = regValue[::2]
-#        spiWrite(ADNS3080_FRAME_CAPTURE,[0x83])
-#        time.sleep(1510e-6)
-        for column in range(ADNS3080_PIXELS_Y):
-            for row in range(ADNS3080_PIXELS_X):
-#                if (SPI_OPEN == True & self.capture_image == True):
-                try:         # find the old pixel if it exists and delete it 
-                    self.old_pixel = self.pixel_dictionary[row + column * ADNS3080_PIXELS_Y]
-                    self.canvas_for_Image.delete(self.old_pixel)
-                    del(self.old_pixel)
-                except:
-                    thing = None # do nothing
-#                    regValue = spiRead(ADNS3080_FRAME_CAPTURE,[0xff])
-                self.pixelValue[row + column * ADNS3080_PIXELS_X] = regValue[row + column * ADNS3080_PIXELS_X] & 0x3f   #Only lower 6bits have data
-                colour = int(self.pixelValue[row + column * ADNS3080_PIXELS_X]) * 4      #*4 to improve image contrast for display
-                fillColour = "#%02x%02x%02x" % (colour,colour,colour)
-                #draw new pixel and add to pixel_array
-                self.new_pixel = self.canvas_for_Image.create_rectangle(row*self.grid_size,column*self.grid_size,(row+1)*self.grid_size,(column+1)*self.grid_size,fill= fillColour,width=0)
-                self.pixel_dictionary[row + column * ADNS3080_PIXELS_X] = self.new_pixel
-                #else:
-                    #break
+        regValue = numpy.asarray(regValue[::2])
+        regValue = regValue.reshape(30,30)
+        #print(regValue)
+        CapImage = PIL.Image.fromarray(regValue)
+        
+        self.tkpi = PIL.ImageTk.PhotoImage(CapImage)
+        #print(CapImage)
+        Image = self.canvas_for_Image.create_image(300,300,image=self.tkpi)
+        #Image = self.canvas_for_Image.create_image(300,300,image=self.CapImage)
+        #Image = self.canvas_for_Image.create_bitmap(300,300,bitmap=self.tkpi)
+        #time.sleep(0.5)
+
+#        self.label_image.place(x=0,y=0,width=30,height=30)
+
+#        for column in range(ADNS3080_PIXELS_Y):
+#            for row in range(ADNS3080_PIXELS_X):
+##                if (SPI_OPEN == True & self.capture_image == True):
+#                try:         # find the old pixel if it exists and delete it 
+#                    self.old_pixel = self.pixel_dictionary[row + column * ADNS3080_PIXELS_Y]
+#                    self.canvas_for_Image.delete(self.old_pixel)
+#                    del(self.old_pixel)
+#                except:
+#                    thing = None # do nothing
+#
+#                self.pixelValue[row + column * ADNS3080_PIXELS_X] = regValue[row + column * ADNS3080_PIXELS_X] & 0x3f   #Only lower 6bits have data
+#                colour = int(self.pixelValue[row + column * ADNS3080_PIXELS_X]) * 4      #*4 to improve image contrast for display
+#                fillColour = "#%02x%02x%02x" % (colour,colour,colour)
+#                #draw new pixel and add to pixel_array
+#                self.new_pixel = self.canvas_for_Image.create_rectangle(row*self.grid_size,column*self.grid_size,(row+1)*self.grid_size,(column+1)*self.grid_size,fill= fillColour,width=0)
+#                self.pixel_dictionary[row + column * ADNS3080_PIXELS_X] = self.new_pixel
+#                #else:
+#                    #break
 
     def updateDxDy(self):
         buf = [0 for i in range(4)]
