@@ -38,7 +38,7 @@ DATA_FOR_CAPTURE_IMAGE = [0xff,ADNS3080_FRAME_CAPTURE]*899 + [0xff]     # make [
 
 class GUI():
     grid_size = 10
-    pixelValue = [0 for i in range(ADNS3080_PIXELS_X*ADNS3080_PIXELS_Y)]
+    pixelValue = [0 for i in xrange(ADNS3080_PIXELS_X*ADNS3080_PIXELS_Y)]
     position_X = 0
     position_Y = 0
     capture_image = True
@@ -57,8 +57,8 @@ class GUI():
         self.canvas_for_Plot.place(x=0,y=self.grid_size*ADNS3080_PIXELS_Y)
         self.canvas_for_Plot.create_rectangle(0, 0, self.grid_size*ADNS3080_PIXELS_X, self.grid_size*ADNS3080_PIXELS_Y, width=0, fill="white")
         # make grid on plot area
-        for i in range(6):
-            for j in range(6):
+        for i in xrange(6):
+            for j in xrange(6):
                 self.canvas_for_Plot.create_rectangle(j*50+1, i*50+1, (j+1)*50-1, (i+1)*50-1, width=0, fill="lightgray")
         self.init_data = self.canvas_for_Plot.create_oval(self.position_X - self.grid_size/2 + self.position_gap, self.position_Y - self.grid_size/2 + self.position_gap,\
                                                          self.position_X + self.grid_size/2 + self.position_gap, self.position_Y + self.grid_size/2 + self.position_gap, fill = 'blue')
@@ -124,14 +124,20 @@ class GUI():
         spiWrite(ADNS3080_FRAME_CAPTURE,[0x83])
         time.sleep(1510e-6)
         regValue = spiRead(ADNS3080_FRAME_CAPTURE,DATA_FOR_CAPTURE_IMAGE)
-        regValue = numpy.asarray(regValue[::2])
-        regValue = regValue.reshape(30,30)
-        #print(regValue)
+        regValue = numpy.asarray(regValue[::2]) & 0x3f
+        regValue = regValue.reshape(30,30) * 4
+        
         CapImage = PIL.Image.fromarray(regValue)
+        CapImage = CapImage.resize((self.grid_size*ADNS3080_PIXELS_X,self.grid_size*ADNS3080_PIXELS_Y))     # resize Image
         
         self.tkpi = PIL.ImageTk.PhotoImage(CapImage)
-        #print(CapImage)
-        Image = self.canvas_for_Image.create_image(300,300,image=self.tkpi)
+ 
+        self.canvas_for_Image.create_image(0,0,anchor=NW,image=self.tkpi)
+        self.hoge = self.tkpi      # this line should be needed to prevent blink. I don't know why this helps.
+        #self.old_Image = self.new_Image
+        #self.canvas_for_Image.itemconfigure(self.canvas_for_Image, image = self.tkpi)
+        
+        #time.sleep(0.1)
         #Image = self.canvas_for_Image.create_image(300,300,image=self.CapImage)
         #Image = self.canvas_for_Image.create_bitmap(300,300,bitmap=self.tkpi)
         #time.sleep(0.5)
@@ -158,7 +164,7 @@ class GUI():
 #                    #break
 
     def updateDxDy(self):
-        buf = [0 for i in range(4)]
+        buf = [0 for i in xrange(4)]
         buf = spiRead(ADNS3080_MOTION_BURST,buf)
         motion = buf[0]
         if  (motion & 0x10):
