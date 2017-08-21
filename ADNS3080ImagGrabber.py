@@ -54,7 +54,7 @@ class GUI():
         self.canvas_for_Image.place(x=0,y=0)
 
         self.canvas_for_Plot = Canvas(master, width = self.grid_size*ADNS3080_PIXELS_X, height = self.grid_size*ADNS3080_PIXELS_Y)
-        self.canvas_for_Plot.place(x=0,y=self.grid_size*ADNS3080_PIXELS_Y)
+        self.canvas_for_Plot.place(x=self.grid_size*ADNS3080_PIXELS_X,y=0)
         self.canvas_for_Plot.create_rectangle(0, 0, self.grid_size*ADNS3080_PIXELS_X, self.grid_size*ADNS3080_PIXELS_Y, width=0, fill="white")
         # make grid on plot area
         for i in xrange(6):
@@ -67,10 +67,10 @@ class GUI():
         
 
         self.button_exit = Button(master, text="STOP", width = 15, command = self.endProgram)
-        self.button_exit.place(x=self.grid_size*ADNS3080_PIXELS_X,y=0)
+        self.button_exit.place(x=0,y=self.grid_size*ADNS3080_PIXELS_Y+self.grid_size)
 
         self.button_change_status = Button(master, text="Change Mode", width = 15, command = self.change_status)
-        self.button_change_status.place(x=self.grid_size*ADNS3080_PIXELS_X,y=self.grid_size*3)
+        self.button_change_status.place(x=self.grid_size*ADNS3080_PIXELS_X/2,y=self.grid_size*ADNS3080_PIXELS_Y+self.grid_size)
 
         self.read_loop()                              # start attempts to read from ADNS3080 via SPI
 
@@ -134,34 +134,6 @@ class GUI():
  
         self.canvas_for_Image.create_image(0,0,anchor=NW,image=self.tkpi)
         self.hoge = self.tkpi      # this line should be needed to prevent blink. I don't know why this helps.
-        #self.old_Image = self.new_Image
-        #self.canvas_for_Image.itemconfigure(self.canvas_for_Image, image = self.tkpi)
-        
-        #time.sleep(0.1)
-        #Image = self.canvas_for_Image.create_image(300,300,image=self.CapImage)
-        #Image = self.canvas_for_Image.create_bitmap(300,300,bitmap=self.tkpi)
-        #time.sleep(0.5)
-
-#        self.label_image.place(x=0,y=0,width=30,height=30)
-
-#        for column in range(ADNS3080_PIXELS_Y):
-#            for row in range(ADNS3080_PIXELS_X):
-##                if (SPI_OPEN == True & self.capture_image == True):
-#                try:         # find the old pixel if it exists and delete it 
-#                    self.old_pixel = self.pixel_dictionary[row + column * ADNS3080_PIXELS_Y]
-#                    self.canvas_for_Image.delete(self.old_pixel)
-#                    del(self.old_pixel)
-#                except:
-#                    thing = None # do nothing
-#
-#                self.pixelValue[row + column * ADNS3080_PIXELS_X] = regValue[row + column * ADNS3080_PIXELS_X] & 0x3f   #Only lower 6bits have data
-#                colour = int(self.pixelValue[row + column * ADNS3080_PIXELS_X]) * 4      #*4 to improve image contrast for display
-#                fillColour = "#%02x%02x%02x" % (colour,colour,colour)
-#                #draw new pixel and add to pixel_array
-#                self.new_pixel = self.canvas_for_Image.create_rectangle(row*self.grid_size,column*self.grid_size,(row+1)*self.grid_size,(column+1)*self.grid_size,fill= fillColour,width=0)
-#                self.pixel_dictionary[row + column * ADNS3080_PIXELS_X] = self.new_pixel
-#                #else:
-#                    #break
 
     def updateDxDy(self):
         buf = [0 for i in xrange(4)]
