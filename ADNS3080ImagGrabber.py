@@ -1,5 +1,5 @@
 #Read the Optical mouse value via SPI
-#Pin layout
+#   Pin layout
 # RasPi  | ADNS3080
 #  3V3   |   3.3V
 #  GND   |   GND
@@ -18,19 +18,20 @@ from threading import Timer
 
 
 RESET_PIN = 25                                   #GPIO25 for reset ADNS3080
-SPI_CHANNEL = 0                                  # GPIO8(CE0)  if choose CE1, set 1
+SPI_CHANNEL = 0                                  # GPIO8(CE0) if choose CE1, set 1
 SPI_MODE = 3                                     #SPI mode as two bit pattern of clock polarity and phase
                                                  #[CPOL|CPHA] > [0|0] = 0 (mode 0), [0|1] = 1 (mode 1), [1|0] = 2 (mode 2), [1|1] = 3 (mode 3) 
 SPI_MAX_SPEED = 500000
 SPI_OPEN = False
 
-#Register Map for the ADNS3080 OpticalFlow Sensor
+# Register Map for the ADNS3080 OpticalFlow Sensor
 ADNS3080_PRODUCT_ID = 0x00
 ADNS3080_CONFIGURATION_BITS = 0x0a
 ADNS3080_MOTION_BURST = 0x50
 ADNS3080_FRAME_CAPTURE = 0x13
 ADNS3080_PRODUCT_ID_VALUE = 0x17
 
+# Pixel size of ADNS3080
 ADNS3080_PIXELS_X = 30
 ADNS3080_PIXELS_Y = 30
 
@@ -65,14 +66,25 @@ class GUI():
         self.old_data = self.init_data
         
         
-
         self.button_exit = Button(master, text="STOP", width = 15, command = self.endProgram)
         self.button_exit.place(x=0,y=self.grid_size*ADNS3080_PIXELS_Y+self.grid_size)
 
         self.button_change_status = Button(master, text="Change Mode", width = 15, command = self.change_status)
         self.button_change_status.place(x=self.grid_size*ADNS3080_PIXELS_X/2,y=self.grid_size*ADNS3080_PIXELS_Y+self.grid_size)
 
-        self.read_loop()                              # start attempts to read from ADNS3080 via SPI
+        self.CamStatus = StringVar()
+        self.Camlabel = Label(master,textvariable=self.CamStatus,bg='green',font=("Helvetica",12))
+        self.Camlabel.place(x=0,y=0)
+        self.CamStatus.set("Image capture mode: ON")
+
+        self.PlotStatus = StringVar()
+        self.Plotlabel = Label(master,textvariable=self.PlotStatus,bg='red',font=("Helvetica",12))
+        self.Plotlabel.place(x=self.grid_size*ADNS3080_PIXELS_X,y=0)
+        self.PlotStatus.set("Move tracking mode: OFF")
+
+        
+
+        self.read_loop()                              # start attempts to read image from ADNS3080 via SPI
 
     def plotData(self):
         self.canvas_for_Plot.delete(self.old_data)
@@ -89,6 +101,10 @@ class GUI():
         try:
             self.timer.cancel()
             SPI_OPEN = False
+            self.Camlabel.config(background="red")
+            self.Plotlabel.config(background="red")
+            self.CamStatus.set("Image capture mode: OFF")
+            self.PlotStatus.set("Move tracking mode: OFF")
         except:
             print("failed to exit program")
 
@@ -97,8 +113,17 @@ class GUI():
         self.timer.cancel()
         if self.capture_image == False:
             self.capture_image = True
+            self.Camlabel.config(background="green")
+            self.CamStatus.set("Image capture mode: ON")
+            self.Plotlabel.config(background="red")
+            self.PlotStatus.set("Move tracking mode: OFF")
         else:
             self.capture_image = False
+            self.Camlabel.config(background="red")
+            self.CamStatus.set("Image capture mode: OFF")
+            self.Plotlabel.config(background="green")
+            self.PlotStatus.set("Move tracking mode: ON")
+        time.sleep(10e-5)
         resetADNS3080()                               # must reset to change mode in ADNS3080 to get dx dy
         checkConnect()
         configuration()
@@ -124,16 +149,16 @@ class GUI():
         spiWrite(ADNS3080_FRAME_CAPTURE,[0x83])
         time.sleep(1510e-6)
         regValue = spiRead(ADNS3080_FRAME_CAPTURE,DATA_FOR_CAPTURE_IMAGE)
-        regValue = numpy.asarray(regValue[::2]) & 0x3f
+        regValue = numpy.asarray(regValue[::2]) & 0x3f    # Only lower 6bits have data
         regValue = regValue.reshape(30,30) * 4
         
-        CapImage = PIL.Image.fromarray(regValue)
-        CapImage = CapImage.resize((self.grid_size*ADNS3080_PIXELS_X,self.grid_size*ADNS3080_PIXELS_Y))     # resize Image
+        CapImage = PIL.Image.fromarray(regValue)          # convert numpyarray to PIL image object
+        CapImage = CapImage.resize((self.grid_size*ADNS3080_PIXELS_X,self.grid_size*ADNS3080_PIXELS_Y))  # resize Image (30x30 -> 300x300)
         
-        self.tkpi = PIL.ImageTk.PhotoImage(CapImage)
+        self.tkpi = PIL.ImageTk.PhotoImage(CapImage)      # convert PIL image object to ImageTk object
  
         self.canvas_for_Image.create_image(0,0,anchor=NW,image=self.tkpi)
-        self.hoge = self.tkpi      # this line should be needed to prevent blink. I don't know why this helps.
+        self.hoge = self.tkpi                             # this line should be needed to prevent blink. I don't know why this helps.
 
     def updateDxDy(self):
         buf = [0 for i in xrange(4)]
@@ -174,6 +199,7 @@ def resetADNS3080():
 #end def resetADNS3080()
 
 def checkConnect():
+    resp = spiRead(ADNS3080_PRODUCT_ID,[0xff])              # I don'n know why I should try double.
     resp = spiRead(ADNS3080_PRODUCT_ID,[0xff])
     product_ID = resp[0]
     if product_ID == ADNS3080_PRODUCT_ID_VALUE:
