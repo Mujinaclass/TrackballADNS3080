@@ -43,8 +43,6 @@ class GUI():
     position_X = 0
     position_Y = 0
     capture_image = True
-    pixel_dictionary = {}
-    plot_dpi = 100
     position_gap = (grid_size*ADNS3080_PIXELS_X) / 2
 
     def __init__(self, master):
